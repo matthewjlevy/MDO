@@ -6,9 +6,9 @@ This toolkit provides PowerShell scripts to export all inbound security policies
 
 The toolkit includes three main components:
 
-1. **Export-ExchangePolicies.ps1** - Exports all policies to CSV
-2. **Apply-ExchangePolicies.ps1** - Applies decisions made in the CSV back to Exchange Online
-3. **README.md** - This file with comprehensive documentation
+1. **Export-ExchangePolicies.ps1** - Exports all policies to CSV (requires Exchange Online connection)
+2. **Analyze-ExchangePolicies.ps1** - Validates and analyzes the CSV (does NOT require Exchange Online)
+3. **Apply-ExchangePolicies.ps1** - Applies decisions made in the CSV back to Exchange Online (requires Exchange Online connection)
 
 ## Prerequisites
 
@@ -105,7 +105,62 @@ spam.domain.com,Anti-Spam,Policy1,BlockedDomains,,Create,,
 malware.site.net,Anti-Malware,Default,BlockedDomains,Block,,,
 ```
 
-## Script 2: Apply-ExchangePolicies.ps1
+## Script 2: Analyze-ExchangePolicies.ps1
+
+### Purpose
+Validates CSV integrity, provides analysis and statistics, and helps identify duplicates across policies. **This script does not require an Exchange Online connection.**
+
+### When to Use
+Run this script after exporting policies and before applying changes:
+1. Validate the exported CSV data
+2. Review summary statistics and policy breakdown
+3. Identify duplicate objects across policies
+4. Filter data by policy type, list type, or object pattern
+5. Export results by action type for focused review
+
+### Usage
+
+#### Validate CSV for Errors
+Checks for invalid action values and highlights issues:
+```powershell
+.\Analyze-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies_20260216_120000.csv" -Action Validate
+```
+
+#### Show Summary Statistics
+Displays breakdown by policy type and list type:
+```powershell
+.\Analyze-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies_20260216_120000.csv" -Action Summary
+```
+
+#### Find Duplicate Objects
+Identifies objects appearing in multiple policies:
+```powershell
+.\Analyze-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies_20260216_120000.csv" -Action FindDuplicates
+```
+
+#### Filter by Policy Type
+Shows entries from a specific policy type:
+```powershell
+.\Analyze-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies_20260216_120000.csv" -Action FilterByType -PolicyType "Anti-Spam"
+```
+
+#### Filter by List Type
+Shows entries from a specific list type:
+```powershell
+.\Analyze-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies_20260216_120000.csv" -Action FilterByListType -ListType "AllowedSenders"
+```
+
+#### Export by Action Type
+Creates separate CSV files grouped by action (TABL, Mail Flow Rule, etc.):
+```powershell
+.\Analyze-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies_20260216_120000.csv" -Action ExportByAction -OutputPath "C:\Exports"
+```
+
+### CSV Data Reference
+
+For detailed information about CSV columns, data types, and list types, see [CSV_DATA_DICTIONARY.md](CSV_DATA_DICTIONARY.md).
+
+## Script 3: Apply-ExchangePolicies.ps1
 
 ### Purpose
 Reads the updated CSV and applies the marked actions to Exchange Online.
@@ -137,31 +192,89 @@ Applies changes with a confirmation prompt:
 .\Apply-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies_20260216_120000.csv" -Action Apply -SkipConfirmation
 ```
 
-## Workflow Recommendations
+## Recommended Workflow
 
-### Tier 1: Review & Plan
-1. Run Export script to collect current policies
-2. Open CSV in spreadsheet application
-3. Analyze and categorize entries
-4. Decide on consolidation strategy
-5. Mark actions in CSV columns
+For a complete step-by-step guide to getting started, see [QUICKSTART.md](QUICKSTART.md).
 
-### Tier 2: Validate Changes
-1. Save the updated CSV
-2. Run Apply script in Preview mode to see what will happen
-3. Review the preview output carefully
-4. Adjust CSV if needed
+### Phase 1: Export & Review
 
-### Tier 3: Generate Deployment Script
-1. Run Apply script in Export mode
-2. Review the generated PowerShell script
-3. Make any manual adjustments if needed
-4. Get approval before proceeding
+**Step 1: Export Policies**
+```powershell
+# Run Export script (requires Exchange Online connection)
+.\Export-ExchangePolicies.ps1 -OutputPath "C:\Exports\Exchange_Policies.csv"
+```
 
-### Tier 4: Deploy
-1. Run the generated deployment script or use Apply mode
-2. Monitor the process
-3. Verify changes in Exchange Online admin center
+**Step 2: Initial Analysis** (no connection needed)
+```powershell
+# Get summary statistics to understand current state
+.\Analyze-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies.csv" -Action Summary
+
+# Find duplicates across policies
+.\Analyze-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies.csv" -Action FindDuplicates
+```
+
+**Step 3: Review & Plan**
+1. Open CSV in Excel or similar application
+2. Review each object and its source policy
+3. Use the Analyze script with filtering to focus on specific policy types or list types
+4. Decide on consolidation strategy (TABL, Mail Flow Rules, Connection Filter, or Remove)
+5. Mark your decisions in the appropriate action columns
+
+### Phase 2: Validate & Plan Changes
+
+**Step 4: Validate CSV** (no connection needed)
+```powershell
+# Check for data entry errors
+.\Analyze-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies.csv" -Action Validate
+
+# Export by action type for focused review
+.\Analyze-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies.csv" -Action ExportByAction -OutputPath "C:\Exports"
+```
+
+**Step 5: Preview Changes** (requires Exchange Online connection)
+```powershell
+# See what will be applied without making changes
+.\Apply-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies.csv" -Action Preview
+```
+
+### Phase 3: Generate & Review Deployment Script
+
+**Step 6: Export Script** (requires Exchange Online connection)
+```powershell
+# Generate PowerShell script for review
+.\Apply-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies.csv" -Action Export -OutputScript "C:\Exports\ApplyChanges.ps1"
+```
+
+**Step 7: Review & Approve**
+1. Review the generated `ApplyChanges.ps1` script
+2. Share with security team for approval
+3. Verify all changes match your plan
+4. Check for any manual actions needed (mail flow rules, policy removals)
+
+### Phase 4: Deploy Changes
+
+**Step 8: Apply Changes** (requires Exchange Online connection)
+```powershell
+# Option A: Run generated script directly
+.\ApplyChanges.ps1
+
+# Option B: Use Apply script with confirmation
+.\Apply-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies.csv" -Action Apply
+```
+
+**Step 9: Verify**
+1. Monitor the process output
+2. Check Exchange Online admin center for changes
+3. Verify TABL entries, mail flow rules, and connection filter updates
+4. Test with sample messages to ensure policies work as intended
+
+### Key Points
+
+- **Export & Apply require Exchange Online connection** - Run from an admin machine with ExchangeOnlineManagement module
+- **Analyze can run anywhere** - Useful for reviewing and planning without connection
+- **Always preview first** - Use Preview mode before applying changes
+- **Generate script for approval** - Use Export mode to create reviewable PowerShell script
+- **Test incrementally** - Start with TABL entries, verify, then move to other actions
 
 ## Important Considerations
 
