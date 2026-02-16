@@ -99,11 +99,40 @@ The exported CSV contains the following columns:
 
 ```
 Object,PolicyType,PolicyName,ListType,TABL,MailFlowRule,DefaultConnFilter,Remove
-partner@trusted.com,Anti-Spam,Default,AllowedSenders,Allow,,, 
-spam.domain.com,Anti-Spam,Policy1,BlockedDomains,,Create,, 
-192.168.1.100,Connection Filter,Default,AllowedIPs,,, ,
-malware.site.net,Anti-Malware,Default,BlockedDomains,Block,,,
+partner@trusted-partner.com,Anti-Spam,Default,AllowedSenders,Allow,,,
+phishing.malicious.com,Anti-Spam,Default,BlockedDomains,Block,,,
+trusted.partner.com,Anti-Spam,Default,AllowedDomains,Allow,,,
+103.212.121.87/32,Connection Filter,Default,AllowedIPs,,, ,Block
+malware.delivery.com,Anti-Malware,Default,BlockedDomains,Block,,,
+trusted-sender@verified.com,Anti-Spam (Preset),Standard Preset Security Policy,AllowedSenders,Allow,,,
 ```
+
+### Sample CSV in Excel (Visual Preview)
+
+When you open the exported CSV in Excel, it will look like this:
+
+| Object | PolicyType | PolicyName | ListType | TABL | MailFlowRule | DefaultConnFilter | Remove |
+|--------|-----------|-----------|----------|------|--------------|-------------------|--------|
+| admin@trusted.com | Anti-Spam | Default | AllowedSenders | Allow | | | |
+| phishing.com | Anti-Spam | Default | BlockedDomains | Block | | | |
+| trusted.com | Anti-Spam | Default | AllowedDomains | Allow | | | |
+| 192.168.1.0/24 | Connection Filter | Default | AllowedIPs | | | Add | |
+| virus.net | Anti-Malware | Default | BlockedDomains | Block | | | |
+| internal-test@corp.com | Anti-Spam | Default | ExcludedSenders | | | | |
+| staging.internal | Anti-Phishing | Default | ExcludedDomains | | | | |
+| partner@vendor.com | Anti-Phishing (Preset) | Standard Policy | AllowedSenders | Allow | | | |
+
+**Color-coded for easy review:**
+- 🟢 **Green "Allow"** = Entries being allowed
+- 🔴 **Red "Block"** = Entries being blocked
+- 🔵 **Blue "Add"** = Entries to add to connection filter
+- ⬜ **Blank** = No action planned
+
+You can use Excel's built-in features to:
+- **Filter** by PolicyType to see all Anti-Spam, Anti-Phishing, etc. entries separately
+- **Sort** by ListType to group AllowedSenders, BlockedDomains, etc.
+- **Conditional Formatting** to highlight rows with actions marked
+- **Add Comments** for documentation of your decisions
 
 ## Script 2: Analyze-ExchangePolicies.ps1
 
@@ -191,7 +220,45 @@ Applies changes with a confirmation prompt:
 ```powershell
 .\Apply-ExchangePolicies.ps1 -CSVPath "C:\Exports\Exchange_Policies_20260216_120000.csv" -Action Apply -SkipConfirmation
 ```
+### Rollback Feature
 
+**All generated scripts include built-in rollback capability!** This allows you to safely test changes and undo them if needed.
+
+#### Rolling Back Changes
+The same generated script can be used to rollback all changes:
+
+```powershell
+# Original apply command (first time)
+.\ApplyChanges.ps1
+
+# ... Test changes in your environment ...
+
+# Rollback if needed
+.\ApplyChanges.ps1 -Rollback
+```
+
+#### How Rollback Works
+- **TABL Entries**: Automatically removed using Get-TenantAllowBlockListItems and Remove-TenantAllowBlockListItems
+- **Connection Filter IPs**: Automatically removed using Set-HostedConnectionFilterPolicy -IPAllowList/@{Remove='...'}
+- **Safe Operation**: Handles edge cases like already-removed entries without failing
+- **No Manual Actions Required**: Rollback for TODO items (Mail Flow Rules, policy removals) must still be done manually
+
+#### Rollback Example Output
+```
+========== ROLLBACK MODE ==========
+Rolling back policy changes...
+
+# ========== Action 1 ==========
+Removing admin@trusted.com from TABL (Allow)...
+  ✓ Removed successfully
+
+# ========== Action 2 ==========
+Removing 103.212.121.87 from Default Connection Filter (IPAllowList)...
+  ✓ Removed successfully
+
+========== ROLLBACK COMPLETED ==========
+Total changes rolled back: 2
+```
 ## Recommended Workflow
 
 For a complete step-by-step guide to getting started, see [QUICKSTART.md](QUICKSTART.md).
@@ -268,6 +335,14 @@ For a complete step-by-step guide to getting started, see [QUICKSTART.md](QUICKS
 3. Verify TABL entries, mail flow rules, and connection filter updates
 4. Test with sample messages to ensure policies work as intended
 
+**Step 10: Rollback (Optional - If Issues Found)**
+If you discover issues after applying changes:
+```powershell
+# Use the same script to rollback all automated changes
+.\ApplyChanges.ps1 -Rollback
+```
+This will automatically remove all TABL entries and revert Connection Filter IPs.
+
 ### Key Points
 
 - **Export & Apply require Exchange Online connection** - Run from an admin machine with ExchangeOnlineManagement module
@@ -275,6 +350,7 @@ For a complete step-by-step guide to getting started, see [QUICKSTART.md](QUICKS
 - **Always preview first** - Use Preview mode before applying changes
 - **Generate script for approval** - Use Export mode to create reviewable PowerShell script
 - **Test incrementally** - Start with TABL entries, verify, then move to other actions
+- **Rollback available** - Generated scripts include rollback capability for safe testing
 
 ## Important Considerations
 
@@ -335,6 +411,7 @@ Ensure account has Security Administrator or Global Administrator role:
 4. **Color Code**: Use conditional formatting to highlight actions
 5. **Comments**: Add notes in a new column for context
 6. **Limits**: Consider TABL size limits (check Microsoft documentation)
+7. **Sample Data**: See [SAMPLE_Exchange_Policies.csv](SAMPLE_Exchange_Policies.csv) for a realistic example
 
 ## Additional Resources
 
@@ -352,6 +429,13 @@ If you encounter issues:
 4. Try running in PowerShell 7+ (cross-platform)
 
 ## Version History
+
+- v1.1 (2026-02-16): Rollback feature release
+  - Rollback capability for all generated scripts
+  - Fixed cmdlet syntax issues (TABL and Connection Filter)
+  - Added sample CSV file
+  - Enhanced documentation with visual examples
+  - Parser error fixes in Analyze script
 
 - v1.0 (2026-02-16): Initial release
   - Export of anti-spam, anti-phish, anti-malware, and connection filter policies

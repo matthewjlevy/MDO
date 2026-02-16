@@ -28,15 +28,20 @@ Reference guide for the consolidated Exchange Online policies CSV output.
 **Description:** The type of Exchange Online security policy this object comes from.  
 
 **Valid Values:**
-- `Anti-Spam` - HostedContentFilterPolicy (anti-spam filtering)
-- `Anti-Phishing` - AntiPhishPolicy (anti-phishing protection)
-- `Anti-Malware` - MalwareFilterPolicy (malware protection)
+- `Anti-Spam` - HostedContentFilterPolicy (regular anti-spam filtering)
+- `Anti-Phishing` - AntiPhishPolicy (regular anti-phishing protection)
+- `Anti-Malware` - MalwareFilterPolicy (regular malware protection)
 - `Connection Filter` - HostedConnectionFilterPolicy (IP-based filtering)
+- `Anti-Spam (Preset)` - Standard/Strict Preset Anti-Spam Security Policy
+- `Anti-Phishing (Preset)` - Standard/Strict Preset Anti-Phishing Security Policy
+- `Anti-Malware (Preset)` - Standard/Strict Preset Anti-Malware Security Policy
 
 **Notes:**
 - Each policy type has different capabilities
 - Some object types only apply to certain policies
 - TABL supports Anti-Spam and Anti-Phishing objects best
+- Preset policies are Microsoft-managed security baselines
+- Regular and Preset policies are handled separately to avoid duplicates
 
 ---
 
@@ -49,11 +54,14 @@ Reference guide for the consolidated Exchange Online policies CSV output.
 - `Policy1`, `Policy2` - Custom named policies
 - `Executives` - Role-based policy
 - `Partners` - Business unit policy
+- `Standard Preset Security Policy` - Microsoft-managed preset
+- `Strict Preset Security Policy` - Microsoft-managed preset
 
 **Notes:**
 - Exchange Online usually has one "Default" policy
 - Additional policies can be created for specific org units
 - Policy names are case-sensitive in Exchange Online
+- Preset policies have fixed names provided by Microsoft
 
 ---
 
@@ -64,8 +72,11 @@ Reference guide for the consolidated Exchange Online policies CSV output.
 **Valid Values:**
 - `AllowedSenders` - List of allowed senders (sender addresses)
 - `BlockedSenders` - List of blocked senders (sender addresses)
+- `ExcludedSenders` - List of excluded senders (skip policy rules)
 - `AllowedDomains` - List of allowed domains
 - `BlockedDomains` - List of blocked domains
+- `ExcludedDomains` - List of excluded domains (skip policy rules)
+- `ExcludedSubDomains` - List of excluded subdomains (Anti-Phishing only)
 - `AllowedIPs` - List of allowed IP addresses/ranges
 - `BlockedIPs` - List of blocked IP addresses/ranges
 
@@ -73,10 +84,18 @@ Reference guide for the consolidated Exchange Online policies CSV output.
 
 | PolicyType | Supported ListTypes |
 |---|---|
-| Anti-Spam | AllowedSenders, BlockedSenders, AllowedDomains, BlockedDomains |
-| Anti-Phishing | AllowedSenders, BlockedSenders, AllowedDomains, BlockedDomains |
-| Anti-Malware | AllowedSenders, AllowedDomains |
+| Anti-Spam | AllowedSenders, BlockedSenders, ExcludedSenders, AllowedDomains, BlockedDomains, ExcludedDomains |
+| Anti-Phishing | AllowedSenders, BlockedSenders, ExcludedSenders, AllowedDomains, BlockedDomains, ExcludedDomains, ExcludedSubDomains |
+| Anti-Malware | AllowedSenders, ExcludedSenders, AllowedDomains, ExcludedDomains |
 | Connection Filter | AllowedIPs, BlockedIPs |
+| Anti-Spam (Preset) | AllowedSenders, BlockedSenders, ExcludedSenders, AllowedDomains, BlockedDomains, ExcludedDomains |
+| Anti-Phishing (Preset) | AllowedSenders, BlockedSenders, ExcludedSenders, AllowedDomains, BlockedDomains, ExcludedDomains, ExcludedSubDomains |
+| Anti-Malware (Preset) | AllowedSenders, ExcludedSenders, AllowedDomains, ExcludedDomains |
+
+**Understanding Excluded Lists:**
+- **Excluded Senders/Domains**: Skip the policy rules - messages are not filtered
+- **Allowed Senders/Domains**: Automatically pass through (positive whitelist)
+- **Blocked Senders/Domains**: Automatically rejected (negative blacklist)
 
 ---
 

@@ -71,6 +71,21 @@ This shows what would happen without making changes.
 
 # When satisfied, run it
 powershell -File "C:\temp\changes.ps1"
+
+# If issues found, roll back all changes
+powershell -File "C:\temp\changes.ps1" -Rollback
+```
+
+### Scenario 3b: Safe Testing with Rollback
+```powershell
+# Apply changes
+.\Apply-ExchangePolicies.ps1 -CSVPath "exchange_policies.csv" -Action Apply
+
+# Test your configuration for 1-2 days
+
+# If everything works, you're done!
+# If issues occur, rollback is easy:
+.\ApplyChanges.ps1 -Rollback
 ```
 
 ### Scenario 4: Validate Your CSV Before Applying
@@ -113,6 +128,7 @@ powershell -File "C:\temp\changes.ps1"
 - ✓ Preview mode shows changes without applying them
 - ✓ Export mode generates script for review before running
 - ✓ Apply mode asks for confirmation before making changes
+- ✓ **Rollback capability** - Easily undo changes with `-Rollback` parameter
 - ✓ All changes are reversible
 
 ## Need Help?

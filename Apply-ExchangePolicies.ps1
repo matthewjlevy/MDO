@@ -81,10 +81,10 @@ function Get-ActionCommands {
     
     # Check TABL action
     if ($Row.TABL -eq "Allow" -or $Row.TABL -eq "Block") {
-        $listType = if ($Row.TABL -eq "Allow") { "allow" } else { "block" }
-        $entryType = if ($Row.Object -match "^\d+\.\d+\.\d+\.\d+(/\d+)?$") { "IP" } else { "sender" }
+        $tablAction = if ($Row.TABL -eq "Allow") { "-Allow" } else { "-Block" }
+        $listType = if ($Row.Object -match "^\d+\.\d+\.\d+\.\d+(/\d+)?$") { "IP" } else { "Sender" }
         
-        $cmd = "New-TenantAllowBlockListItems -ListType $listType -Entries @('$($Row.Object)') -EntryType $entryType"
+        $cmd = "New-TenantAllowBlockListItems $tablAction -Entries @('$($Row.Object)') -ListType $listType"
         $commands += $cmd
     }
     
@@ -95,16 +95,18 @@ function Get-ActionCommands {
         $commands += $cmd
     }
     
-    # Check Default Connection Filter action
+    # Check Default Connection Filter action (only IPs supported)
     if ($Row.DefaultConnFilter -eq "Add") {
-        if ($Row.ListType -like "Allowed*") {
-            $param = if ($Row.ListType -eq "AllowedIPs") { "IPAllowList" } else { "WhitelistedDomains" }
+        if ($Row.ListType -eq "AllowedIPs") {
+            $cmd = "Set-HostedConnectionFilterPolicy -Identity 'Default' -IPAllowList @{Add='$($Row.Object)'}"
+            $commands += $cmd
+        } elseif ($Row.ListType -eq "BlockedIPs") {
+            $cmd = "Set-HostedConnectionFilterPolicy -Identity 'Default' -IPBlockList @{Add='$($Row.Object)'}"
+            $commands += $cmd
         } else {
-            $param = if ($Row.ListType -eq "BlockedIPs") { "IPBlockList" } else { "BlacklistedDomains" }
+            $cmd = "# NOTE: Connection Filter only supports IPs. Use TABL or Mail Flow Rules for domains/senders."
+            $commands += $cmd
         }
-        
-        $cmd = "Set-HostedConnectionFilterPolicy -Identity 'Default' -$param @{Add='$($Row.Object)'}"
-        $commands += $cmd
     }
     
     # Check Remove action
@@ -184,16 +186,42 @@ try {
         $scriptContent = @"
 #Requires -Modules ExchangeOnlineManagement
 <#
+.SYNOPSIS
     Auto-generated script from Apply-ExchangePolicies.ps1
+    
+.DESCRIPTION
+    This script can both apply and rollback changes to Exchange Online policies.
     Generated: $(Get-Date)
     Source CSV: $CSVPath
+    
+.PARAMETER Rollback
+    When specified, rolls back all changes made by this script.
+    
+.EXAMPLE
+    .\ApplyChanges.ps1
+    Applies all changes to Exchange Online
+    
+.EXAMPLE
+    .\ApplyChanges.ps1 -Rollback
+    Rolls back all changes previously applied
 #>
+
+param(
+    [switch]`$Rollback
+)
 
 `$ErrorActionPreference = 'Continue'
 
 Connect-ExchangeOnline
 
-Write-Host "Applying policy changes..." -ForegroundColor Cyan
+if (`$Rollback) {
+    Write-Host "========== ROLLBACK MODE ==========" -ForegroundColor Yellow
+    Write-Host "Rolling back policy changes..." -ForegroundColor Yellow
+} else {
+    Write-Host "========== APPLY MODE ==========" -ForegroundColor Cyan
+    Write-Host "Applying policy changes..." -ForegroundColor Cyan
+}
+
 `$changeCount = 0
 
 "@
@@ -207,37 +235,76 @@ Write-Host "Applying policy changes..." -ForegroundColor Cyan
             $scriptContent += "# ListType: $($row.ListType)`n`n"
             
             if ($row.TABL -and $row.TABL -ne "") {
-                $listType = if ($row.TABL -like "Allow*") { "allow" } else { "block" }
-                $entryType = if ($row.Object -match "^\d+\.\d+\.\d+\.\d+(/\d+)?$") { "IP" } else { "sender" }
-                $scriptContent += "Write-Host 'Adding $($row.Object) to TABL as $($row.TABL)...' -ForegroundColor Yellow`n"
-                $scriptContent += "try {`n"
-                $scriptContent += "    New-TenantAllowBlockListItems -ListType $listType -Entries @('$($row.Object)') -EntryType $entryType`n"
-                $scriptContent += "    `$changeCount++`n"
+                $tablAction = if ($row.TABL -eq "Allow") { "-Allow" } else { "-Block" }
+                $listType = if ($row.Object -match "^\d+\.\d+\.\d+\.\d+(/\d+)?$") { "IP" } else { "Sender" }
+                
+                # Apply logic
+                $scriptContent += "if (-not `$Rollback) {`n"
+                $scriptContent += "    Write-Host 'Adding $($row.Object) to TABL as $($row.TABL)...' -ForegroundColor Yellow`n"
+                $scriptContent += "    try {`n"
+                $scriptContent += "        New-TenantAllowBlockListItems $tablAction -Entries @('$($row.Object)') -ListType $listType`n"
+                $scriptContent += "        `$changeCount++`n"
+                $scriptContent += "        Write-Host '  ✓ Added successfully' -ForegroundColor Green`n"
+                $scriptContent += "    }`n"
+                $scriptContent += "    catch {`n"
+                $scriptContent += "        Write-Error `"Failed to add $($row.Object) to TABL: `$_`"`n"
+                $scriptContent += "    }`n"
                 $scriptContent += "}`n"
-                $scriptContent += "catch {`n"
-                $scriptContent += "    Write-Error `"Failed to add $($row.Object) to TABL: `$_`"`n"
+                
+                # Rollback logic
+                $scriptContent += "else {`n"
+                $scriptContent += "    Write-Host 'Removing $($row.Object) from TABL ($($row.TABL))...' -ForegroundColor Yellow`n"
+                $scriptContent += "    try {`n"
+                $scriptContent += "        # Get the entry to find its ID`n"
+                $scriptContent += "        `$entries = Get-TenantAllowBlockListItems -ListType $listType -Entry '$($row.Object)' -ErrorAction SilentlyContinue`n"
+                $scriptContent += "        if (`$entries) {`n"
+                $scriptContent += "            foreach (`$entry in `$entries) {`n"
+                $scriptContent += "                Remove-TenantAllowBlockListItems -ListType $listType -Ids `$entry.Identity`n"
+                $scriptContent += "                `$changeCount++`n"
+                $scriptContent += "            }`n"
+                $scriptContent += "            Write-Host '  ✓ Removed successfully' -ForegroundColor Green`n"
+                $scriptContent += "        } else {`n"
+                $scriptContent += "            Write-Warning '  Entry not found in TABL, may have been already removed'`n"
+                $scriptContent += "        }`n"
+                $scriptContent += "    }`n"
+                $scriptContent += "    catch {`n"
+                $scriptContent += "        Write-Error `"Failed to remove $($row.Object) from TABL: `$_`"`n"
+                $scriptContent += "    }`n"
                 $scriptContent += "}`n`n"
             }
             
             if ($row.DefaultConnFilter -and $row.DefaultConnFilter -ne "") {
-                $scriptContent += "Write-Host 'Adding $($row.Object) to Default Connection Filter...' -ForegroundColor Yellow`n"
-                $scriptContent += "try {`n"
-                
-                if ($row.ListType -eq "AllowedIPs") {
-                    $scriptContent += "    Set-HostedConnectionFilterPolicy -Identity 'Default' -IPAllowList @{Add='$($row.Object)'}`n"
-                } elseif ($row.ListType -eq "BlockedIPs") {
-                    $scriptContent += "    Set-HostedConnectionFilterPolicy -Identity 'Default' -IPBlockList @{Add='$($row.Object)'}`n"
-                } elseif ($row.ListType -like "Allowed*") {
-                    $scriptContent += "    Set-HostedConnectionFilterPolicy -Identity 'Default' -AllowedSenderDomains @{Add='$($row.Object)'}`n"
+                if ($row.ListType -eq "AllowedIPs" -or $row.ListType -eq "BlockedIPs") {
+                    $param = if ($row.ListType -eq "AllowedIPs") { "IPAllowList" } else { "IPBlockList" }
+                    
+                    # Apply logic
+                    $scriptContent += "if (-not `$Rollback) {`n"
+                    $scriptContent += "    Write-Host 'Adding $($row.Object) to Default Connection Filter ($param)...' -ForegroundColor Yellow`n"
+                    $scriptContent += "    try {`n"
+                    $scriptContent += "        Set-HostedConnectionFilterPolicy -Identity 'Default' -$param @{Add='$($row.Object)'}`n"
+                    $scriptContent += "        `$changeCount++`n"
+                    $scriptContent += "        Write-Host '  ✓ Added successfully' -ForegroundColor Green`n"
+                    $scriptContent += "    }`n"
+                    $scriptContent += "    catch {`n"
+                    $scriptContent += "        Write-Error `"Failed to add $($row.Object) to Connection Filter: `$_`"`n"
+                    $scriptContent += "    }`n"
+                    $scriptContent += "}`n"
+                    
+                    # Rollback logic
+                    $scriptContent += "else {`n"
+                    $scriptContent += "    Write-Host 'Removing $($row.Object) from Default Connection Filter ($param)...' -ForegroundColor Yellow`n"
+                    $scriptContent += "    try {`n"
+                    $scriptContent += "        Set-HostedConnectionFilterPolicy -Identity 'Default' -$param @{Remove='$($row.Object)'}`n"
+                    $scriptContent += "        `$changeCount++`n"
+                    $scriptContent += "        Write-Host '  ✓ Removed successfully' -ForegroundColor Green`n"
+                    $scriptContent += "    }`n"
+                    $scriptContent += "    catch {`n"
+                    $scriptContent += "        Write-Error `"Failed to remove $($row.Object) from Connection Filter: `$_`"`n"
+                    $scriptContent += "    }`n"
+                    $scriptContent += "}`n`n"
                 } else {
-                    $scriptContent += "    Set-HostedConnectionFilterPolicy -Identity 'Default' -BlockedSenderDomains @{Add='$($row.Object)'}`n"
+                    $scriptContent += "# NOTE: Connection Filter only supports IPs. '$($row.Object)' ($($row.ListType)) cannot be added. Use TABL or Mail Flow Rules instead.`n`n"
                 }
-                
-                $scriptContent += "    `$changeCount++`n"
-                $scriptContent += "}`n"
-                $scriptContent += "catch {`n"
-                $scriptContent += "    Write-Error `"Failed to add $($row.Object) to Connection Filter: `$_`"`n"
-                $scriptContent += "}`n`n"
             }
             
             if ($row.MailFlowRule -and $row.MailFlowRule -ne "") {
@@ -253,7 +320,17 @@ Write-Host "Applying policy changes..." -ForegroundColor Cyan
             $index++
         }
         
-        $scriptContent += "`nWrite-Host `"Completed. Total changes: `$changeCount`" -ForegroundColor Green`n"
+        $scriptContent += "`n"
+        $scriptContent += "if (`$Rollback) {`n"
+        $scriptContent += "    Write-Host `"========== ROLLBACK COMPLETED ==========`" -ForegroundColor Yellow`n"
+        $scriptContent += "    Write-Host `"Total changes rolled back: `$changeCount`" -ForegroundColor Green`n"
+        $scriptContent += "} else {`n"
+        $scriptContent += "    Write-Host `"========== APPLY COMPLETED ==========`" -ForegroundColor Cyan`n"
+        $scriptContent += "    Write-Host `"Total changes applied: `$changeCount`" -ForegroundColor Green`n"
+        $scriptContent += "    Write-Host `"`" -ForegroundColor White`n"
+        $scriptContent += "    Write-Host `"To rollback these changes, run this script with -Rollback parameter:`" -ForegroundColor Yellow`n"
+        $scriptContent += "    Write-Host `"  .\```$(`$MyInvocation.MyCommand.Name) -Rollback`" -ForegroundColor Cyan`n"
+        $scriptContent += "}`n"
         
         $scriptContent | Out-File -FilePath $OutputScript -Encoding UTF8 -Force
         Write-Host "Export completed!" -ForegroundColor Green
@@ -286,29 +363,30 @@ Write-Host "Applying policy changes..." -ForegroundColor Cyan
             
             try {
                 if ($row.TABL -and $row.TABL -ne "") {
-                    $listType = if ($row.TABL -like "Allow*") { "allow" } else { "block" }
-                    $entryType = if ($row.Object -match "^\d+\.\d+\.\d+\.\d+(/\d+)?$") { "IP" } else { "sender" }
+                    $listType = if ($row.Object -match "^\d+\.\d+\.\d+\.\d+(/\d+)?$") { "IP" } else { "Sender" }
                     
-                    Write-Host "  Adding to TABL ($listType)..." -ForegroundColor Gray
-                    New-TenantAllowBlockListItems -ListType $listType -Entries @($row.Object) -EntryType $entryType
+                    Write-Host "  Adding to TABL ($($row.TABL))..." -ForegroundColor Gray
+                    if ($row.TABL -eq "Allow") {
+                        New-TenantAllowBlockListItems -Allow -Entries @($row.Object) -ListType $listType
+                    } else {
+                        New-TenantAllowBlockListItems -Block -Entries @($row.Object) -ListType $listType
+                    }
                     $successCount++
                 }
                 
                 if ($row.DefaultConnFilter -and $row.DefaultConnFilter -ne "") {
-                    Write-Host "  Adding to Default Connection Filter..." -ForegroundColor Gray
-                    
-                    if ($row.ListType -eq "AllowedIPs") {
-                        Set-HostedConnectionFilterPolicy -Identity "Default" -IPAllowList @{Add=$row.Object}
-                    } elseif ($row.ListType -eq "BlockedIPs") {
-                        Set-HostedConnectionFilterPolicy -Identity "Default" -IPBlockList @{Add=$row.Object}
-                    } elseif ($row.ListType -like "*Domain*") {
-                        if ($row.ListType -like "Allowed*") {
-                            Set-HostedConnectionFilterPolicy -Identity "Default" -AllowedSenderDomains @{Add=$row.Object}
+                    if ($row.ListType -eq "AllowedIPs" -or $row.ListType -eq "BlockedIPs") {
+                        Write-Host "  Adding to Default Connection Filter..." -ForegroundColor Gray
+                        
+                        if ($row.ListType -eq "AllowedIPs") {
+                            Set-HostedConnectionFilterPolicy -Identity "Default" -IPAllowList @{Add=$row.Object}
                         } else {
-                            Set-HostedConnectionFilterPolicy -Identity "Default" -BlockedSenderDomains @{Add=$row.Object}
+                            Set-HostedConnectionFilterPolicy -Identity "Default" -IPBlockList @{Add=$row.Object}
                         }
+                        $successCount++
+                    } else {
+                        Write-Warning "  Connection Filter only supports IPs. Skipping $($row.Object) ($($row.ListType)). Use TABL or Mail Flow Rules instead."
                     }
-                    $successCount++
                 }
             }
             catch {
