@@ -2,6 +2,18 @@
 
 All notable changes to the Exchange Online Policy Consolidation Toolkit will be documented in this file.
 
+## [1.2] - 2026-02-18
+
+### Added
+- **Analyze-TABL.ps1**
+  - Exports TABL entries for Sender, Url, FileHash, and IP list types
+  - Cross-references TABL values against the consolidated policy CSV
+  - Output includes TABL metadata plus policy name matches
+
+### Documentation
+- Added optional Analyze-TABL usage to README.md
+- Added optional TABL analysis step to QUICKSTART.md
+
 ## [1.1] - 2026-02-16
 
 ### Added

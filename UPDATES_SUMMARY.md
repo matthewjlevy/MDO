@@ -1,3 +1,47 @@
+# v1.2 Documentation & Code Updates Summary
+
+**Date:** February 18, 2026  
+**Version:** 1.2 Update
+
+## Overview
+Documentation updates and a new optional TABL analysis script for cross-referencing Tenant Allow/Block List entries with policy exports.
+
+---
+
+## Major Features Added
+
+### ✅ Analyze-TABL.ps1 (Optional)
+- **Status**: Implemented
+- **Purpose**: Export TABL entries and cross-reference with policy CSV
+- **Coverage**: Sender, Url, FileHash, IP list types
+- **Output**: Includes TABL metadata plus policy name matches
+
+---
+
+## Documentation Updates
+
+### README.md
+- ✅ Added optional Analyze-TABL usage and output columns
+
+### QUICKSTART.md
+- ✅ Added optional TABL analysis step and scenario
+
+### CHANGELOG.md
+- ✅ Added v1.2 update entry
+
+---
+
+## Files Modified
+
+| File | Status | Changes |
+|------|--------|---------|
+| Analyze-TABL.ps1 | ✅ Added | TABL export and cross-reference report |
+| README.md | ✅ Modified | Added Analyze-TABL instructions |
+| QUICKSTART.md | ✅ Modified | Added optional TABL analysis step |
+| CHANGELOG.md | ✅ Modified | v1.2 entry |
+
+---
+
 # v1.1 Documentation & Code Updates Summary
 
 **Date:** February 16, 2026  

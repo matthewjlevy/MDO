@@ -4,11 +4,12 @@ This toolkit provides PowerShell scripts to export all inbound security policies
 
 ## Overview
 
-The toolkit includes three main components:
+The toolkit includes four main components:
 
 1. **Export-ExchangePolicies.ps1** - Exports all policies to CSV (requires Exchange Online connection)
 2. **Analyze-ExchangePolicies.ps1** - Validates and analyzes the CSV (does NOT require Exchange Online)
 3. **Apply-ExchangePolicies.ps1** - Applies decisions made in the CSV back to Exchange Online (requires Exchange Online connection)
+4. **Analyze-TABL.ps1** - Optional TABL export and cross-reference report (requires Exchange Online connection)
 
 ## Prerequisites
 
@@ -188,6 +189,38 @@ Creates separate CSV files grouped by action (TABL, Mail Flow Rule, etc.):
 ### CSV Data Reference
 
 For detailed information about CSV columns, data types, and list types, see [CSV_DATA_DICTIONARY.md](CSV_DATA_DICTIONARY.md).
+
+## Optional Script: Analyze-TABL.ps1
+
+### Purpose
+Exports Tenant Allow/Block List entries (Sender, URL, FileHash, IP) and cross-references them against the consolidated policy CSV.
+
+### When to Use
+Run this script when you want a TABL-centric report that shows where those same values appear in policies.
+
+### Usage
+
+#### Basic TABL Analysis
+```powershell
+.\Analyze-TABL.ps1 -InputCsvPath "C:\Exports\Exchange_Policies_20260216_120000.csv"
+```
+
+#### Include Advanced Delivery TABL Entries
+```powershell
+.\Analyze-TABL.ps1 -InputCsvPath "C:\Exports\Exchange_Policies_20260216_120000.csv" -IncludeAdvancedDelivery
+```
+
+### Output Columns
+The TABL analysis CSV includes:
+- Primary
+- TABLType (Sender, Url, FileHash, IP)
+- ModifiedBy
+- Action (Allow/Block)
+- Notes
+- Anti-Phishing (Preset) Policies
+- Anti-Phishing Policies
+- Anti-Spam Policies
+- Connection Filter Policies
 
 ## Script 3: Apply-ExchangePolicies.ps1
 

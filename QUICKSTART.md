@@ -38,6 +38,13 @@ This shows what would happen without making changes.
 .\Apply-ExchangePolicies.ps1 -CSVPath "PATH_TO_YOUR_CSV.csv" -Action Apply
 ```
 
+### Optional Step 7: Analyze TABL vs Policies
+```powershell
+.\Analyze-TABL.ps1 -InputCsvPath "PATH_TO_YOUR_CSV.csv"
+```
+
+Use this when you want a TABL-focused report that shows if TABL values also exist in Anti-Phishing, Anti-Spam, or Connection Filter policies.
+
 ## Common Scenarios
 
 ### Scenario 1: Consolidate All Lists to TABL
@@ -60,6 +67,12 @@ This shows what would happen without making changes.
 
 # Look at only Anti-Spam policies
 .\Analyze-ExchangePolicies.ps1 -CSVPath "exchange_policies.csv" -Action FilterByType -PolicyType "Anti-Spam"
+```
+
+### Scenario 2b: Analyze TABL Cross-References
+```powershell
+# Build a TABL-centric report and cross-reference with policy CSV
+.\Analyze-TABL.ps1 -InputCsvPath "exchange_policies.csv"
 ```
 
 ### Scenario 3: Review Before Applying
@@ -109,6 +122,7 @@ powershell -File "C:\temp\changes.ps1" -Rollback
 | Export-ExchangePolicies.ps1 | Exports all policies to CSV |
 | Apply-ExchangePolicies.ps1 | Applies decisions to Exchange Online |
 | Analyze-ExchangePolicies.ps1 | Analyzes and validates CSV data |
+| Analyze-TABL.ps1 | Optional TABL export and cross-reference report |
 | README.md | Full documentation |
 | QUICKSTART.md | This file |
 
